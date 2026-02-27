@@ -1,0 +1,46 @@
+name: KOSPI Data Daily Update
+
+on:
+  schedule:
+    # 매일 평일(월-금) UTC 09:00 (한국 시간 오후 6시)에 실행
+    - cron: '0 9 * * 1-5'
+  workflow_dispatch: # 수동으로도 실행할 수 있게 버튼 생성
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10' # 사용하는 파이썬 버전 지정
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Create Google Service Account credentials file
+      # GitHub Repository Secrets에 등록한 구글 서비스 어카운트 JSON값을 파일로 생성
+      run: |
+        echo "${{ secrets.GCP_CREDENTIALS }}" > service_account_key.json
+      
+    - name: Run KOSPI Data Script
+      run: python update_kospi.py
+      env:
+        # 파이썬 스크립트 안에서 이 환경변수를 읽어서 키 파일 경로로 사용하도록 함
+        GOOGLE_APPLICATION_CREDENTIALS: service_account_key.json
+
+    - name: Commit and Push CSV file
+      # CSV 파일이 깃허브 저장소에 저장되길 원한다면 추가하는 단계 (선택 사항)
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        git add *.csv
+        # 변경된 사항이 있을 경우에만 커밋
+        git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update KOSPI data CSV"
+        git push
